@@ -9,6 +9,16 @@ type IdToDoc struct {
 	Document string             `json:"document"`
 }
 
+type WordToId struct {
+	ID   primitive.ObjectID `json:"id"`
+	Word string             `json:"word"`
+	IDs  []primitive.ObjectID
+}
+
+type SearchTerm struct {
+	Search string `json:"word"`
+}
+
 // type IdToDoc struct {
 // 	ID       primitive.ObjectID `json:"_id" bson:"_id"`
 // 	Document string             `json:"title"`
