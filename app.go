@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -52,7 +51,6 @@ func addDocumentToDB(c *gin.Context) {
 		for i := 0; i < len(words); i += 1 {
 			wordsMap[words[i]] = 0
 		}
-		fmt.Println(wordsMap)
 
 		// return all collections containing the words in `words`
 		WordToIdCursor, err := db.Collection("WordToId").Find(c, bson.M{"word": bson.M{"$in": words}})
@@ -65,7 +63,6 @@ func addDocumentToDB(c *gin.Context) {
 		if err = WordToIdCursor.All(c, &WordToIdCollection); err != nil {
 			panic(err)
 		}
-		fmt.Println(WordToIdCollection)
 
 		// iterate through the documents in the collections, add the new id
 		// to the IDs, then prepare them in an updateone statement and add to
@@ -85,7 +82,6 @@ func addDocumentToDB(c *gin.Context) {
 			toWrite := mongo.NewInsertOneModel().SetDocument(WordToId{Word: word, IDs: newValuesIDs})
 			bulkWriteOperations = append(bulkWriteOperations, toWrite)
 		}
-		fmt.Println(bulkWriteOperations)
 
 		opts := options.BulkWrite().SetOrdered(false)
 
@@ -112,16 +108,13 @@ func searchForDocumentsContainingTerm(c *gin.Context) {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	fmt.Println(toSearch)
 	inputText := strings.ToLower(toSearch.Search)
-	fmt.Println(inputText)
 	inputTextSplit := strings.Split(inputText, " ")
 
 	allOccurrences := []primitive.ObjectID{}
 
 	WordToIdCursor, err := db.Collection("WordToId").Find(c, bson.M{"word": bson.M{"$in": inputTextSplit}})
 	if err != nil {
-		fmt.Println("fmt - collection returned error")
 		log.Println("log - collection returned error")
 		panic(err)
 	}
@@ -146,7 +139,6 @@ func searchForDocumentsContainingTerm(c *gin.Context) {
 		panic(err)
 	}
 
-	fmt.Println(IdToDocCollection)
 	var documents []string
 
 	for _, elements := range IdToDocCollection {
