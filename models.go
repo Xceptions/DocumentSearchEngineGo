@@ -10,13 +10,12 @@ type IdToDoc struct {
 }
 
 type WordToId struct {
-	ID   primitive.ObjectID `json:"id"`
-	Word string             `json:"word"`
+	Word string `json:"word"`
 	IDs  []primitive.ObjectID
 }
 
 type SearchTerm struct {
-	Search string `json:"word"`
+	Search string `json:"search"`
 }
 
 // type IdToDoc struct {

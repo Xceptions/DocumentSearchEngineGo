@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 	"log"
-	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var db *mongo.Database
-var ctx context.Context
+
+// var ctx context.Context
 
 func init() {
 	// set client options
@@ -30,5 +30,6 @@ func init() {
 
 	// set the database and collection variables
 	db = client.Database("DocumentSearchDBGo")
-	ctx, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// defer cancel()
 }

@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +22,7 @@ import (
 func addDocumentToDB(c *gin.Context) {
 	var textToSave IdToDoc
 	saveDocumentChannel := make(chan *mongo.InsertOneResult)
-	saveWordsChannel := make(chan *mongo.InsertOneResult)
+	saveWordsChannel := make(chan *mongo.BulkWriteResult)
 
 	if err := c.BindJSON(&textToSave); err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
@@ -47,10 +48,11 @@ func addDocumentToDB(c *gin.Context) {
 		// var bulkWriteOperations []string
 		textToSaveDoc := strings.ToLower(textToSave.Document)
 		words := strings.Split(textToSaveDoc, " ")
-		wordsMap := make(map[string]string)
-		for i := 0; i < len(wordsMap); i += 2 {
-			wordsMap[words[i]] = words[i+1]
+		wordsMap := make(map[string]int)
+		for i := 0; i < len(words); i += 1 {
+			wordsMap[words[i]] = 0
 		}
+		fmt.Println(wordsMap)
 
 		// return all collections containing the words in `words`
 		WordToIdCursor, err := db.Collection("WordToId").Find(c, bson.M{"word": bson.M{"$in": words}})
@@ -65,17 +67,35 @@ func addDocumentToDB(c *gin.Context) {
 		}
 		fmt.Println(WordToIdCollection)
 
+		// iterate through the documents in the collections, add the new id
+		// to the IDs, then prepare them in an updateone statement and add to
+		// bulkwrite operation, waiting to write
 		var bulkWriteOperations []mongo.WriteModel
-		for _, values := range WordToIdCollection {
-			values.IDs = append(values.IDs, textToSave.ID)
+
+		if len(WordToIdCollection) > 0 {
+			for _, values := range WordToIdCollection {
+				newValuesIDs := append(values.IDs, textToSave.ID)
+				toWrite := mongo.NewUpdateOneModel().SetUpdate(bson.M{values.Word: newValuesIDs})
+				bulkWriteOperations = append(bulkWriteOperations, toWrite)
+				delete(wordsMap, values.Word)
+			}
 		}
-		for _, values := range WordToIdCollection {
-			toWrite := mongo.NewUpdateOneModel().SetUpdate(bson.M{values.Word: values.IDs})
+		for word := range wordsMap {
+			newValuesIDs := []primitive.ObjectID{textToSave.ID}
+			toWrite := mongo.NewInsertOneModel().SetDocument(WordToId{Word: word, IDs: newValuesIDs})
 			bulkWriteOperations = append(bulkWriteOperations, toWrite)
-			delete(wordsMap, values.Word)
+		}
+		fmt.Println(bulkWriteOperations)
+
+		opts := options.BulkWrite().SetOrdered(false)
+
+		results, err := db.Collection("WordToId").BulkWrite(c, bulkWriteOperations, opts)
+
+		if err != nil {
+			panic(err)
 		}
 
-		// saveWordsChannel <- WordToIdCollection
+		saveWordsChannel <- results
 	}()
 
 	select {
@@ -87,12 +107,14 @@ func addDocumentToDB(c *gin.Context) {
 }
 
 func searchForDocumentsContainingTerm(c *gin.Context) {
-	var searchTerm SearchTerm
-	if err := c.BindJSON(&searchTerm); err != nil {
+	var toSearch SearchTerm
+	if err := c.BindJSON(&toSearch); err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	inputText := strings.ToLower(searchTerm.Search)
+	fmt.Println(toSearch)
+	inputText := strings.ToLower(toSearch.Search)
+	fmt.Println(inputText)
 	inputTextSplit := strings.Split(inputText, " ")
 
 	allOccurrences := []primitive.ObjectID{}
@@ -108,12 +130,27 @@ func searchForDocumentsContainingTerm(c *gin.Context) {
 	if err = WordToIdCursor.All(c, &WordToIdCollection); err != nil {
 		panic(err)
 	}
-	fmt.Println(WordToIdCollection)
 
 	for _, values := range WordToIdCollection {
 		allOccurrences = append(allOccurrences, values.IDs...)
 	}
 
-	fmt.Println(allOccurrences)
-	c.JSON(http.StatusOK, allOccurrences)
+	IdToDocCursor, err := db.Collection("IdToDoc").Find(c, bson.M{"id": bson.M{"$in": allOccurrences}})
+	if err != nil {
+		log.Println("log - collection returned error")
+		panic(err)
+	}
+
+	var IdToDocCollection []IdToDoc
+	if err = IdToDocCursor.All(c, &IdToDocCollection); err != nil {
+		panic(err)
+	}
+
+	fmt.Println(IdToDocCollection)
+	var documents []string
+
+	for _, elements := range IdToDocCollection {
+		documents = append(documents, elements.Document)
+	}
+	c.JSON(http.StatusOK, documents)
 }
