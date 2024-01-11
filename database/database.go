@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"context"
@@ -12,7 +12,7 @@ var db *mongo.Database
 
 // var ctx context.Context
 
-func init() {
+func ConnectDB() *mongo.Database {
 	// set client options
 	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
 
@@ -30,6 +30,7 @@ func init() {
 
 	// set the database and collection variables
 	db = client.Database("DocumentSearchDBGo")
+	return db
 	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	// defer cancel()
 }

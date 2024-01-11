@@ -1,16 +1,18 @@
-package main
+package handlers
 
 import (
 	"log"
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/gin-gonic/gin"
+	"github.com/Xceptions/DocumentSearchEngineGo/database"
+	"github.com/Xceptions/DocumentSearchEngineGo/models"
 )
 
 // gets called from main.go as a POST request
@@ -18,8 +20,9 @@ import (
 // binds the request data to textToSave variable
 // generates the id, calls the save_document and
 // save_words function async
-func addDocumentToDB(c *gin.Context) {
-	var textToSave IdToDoc
+func AddDocumentToDB(c *gin.Context) {
+	var textToSave models.IdToDoc
+	DB := database.ConnectDB()
 	saveDocumentChannel := make(chan *mongo.InsertOneResult)
 	saveWordsChannel := make(chan *mongo.BulkWriteResult)
 
@@ -33,7 +36,7 @@ func addDocumentToDB(c *gin.Context) {
 	// it will have its document which is the text gotten from the
 	// front end
 	go func() {
-		result, err := db.Collection("IdToDoc").InsertOne(c, &textToSave)
+		result, err := DB.Collection("IdToDoc").InsertOne(c, &textToSave)
 		if err != nil {
 			log.Println(err)
 			c.AbortWithStatus(http.StatusInternalServerError)
@@ -53,13 +56,13 @@ func addDocumentToDB(c *gin.Context) {
 		}
 
 		// return all collections containing the words in `words`
-		WordToIdCursor, err := db.Collection("WordToId").Find(c, bson.M{"word": bson.M{"$in": words}})
+		WordToIdCursor, err := DB.Collection("WordToId").Find(c, bson.M{"word": bson.M{"$in": words}})
 		if err != nil {
 			log.Println(err)
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
-		var WordToIdCollection []WordToId
+		var WordToIdCollection []models.WordToId
 		if err = WordToIdCursor.All(c, &WordToIdCollection); err != nil {
 			panic(err)
 		}
@@ -79,13 +82,13 @@ func addDocumentToDB(c *gin.Context) {
 		}
 		for word := range wordsMap {
 			newValuesIDs := []primitive.ObjectID{textToSave.ID}
-			toWrite := mongo.NewInsertOneModel().SetDocument(WordToId{Word: word, IDs: newValuesIDs})
+			toWrite := mongo.NewInsertOneModel().SetDocument(models.WordToId{Word: word, IDs: newValuesIDs})
 			bulkWriteOperations = append(bulkWriteOperations, toWrite)
 		}
 
 		opts := options.BulkWrite().SetOrdered(false)
 
-		results, err := db.Collection("WordToId").BulkWrite(c, bulkWriteOperations, opts)
+		results, err := DB.Collection("WordToId").BulkWrite(c, bulkWriteOperations, opts)
 
 		if err != nil {
 			panic(err)
@@ -100,49 +103,4 @@ func addDocumentToDB(c *gin.Context) {
 	case SaveWordsChannelResult := <-saveWordsChannel:
 		c.JSON(http.StatusOK, SaveWordsChannelResult)
 	}
-}
-
-func searchForDocumentsContainingTerm(c *gin.Context) {
-	var toSearch SearchTerm
-	if err := c.BindJSON(&toSearch); err != nil {
-		c.AbortWithStatus(http.StatusBadRequest)
-		return
-	}
-	inputText := strings.ToLower(toSearch.Search)
-	inputTextSplit := strings.Split(inputText, " ")
-
-	allOccurrences := []primitive.ObjectID{}
-
-	WordToIdCursor, err := db.Collection("WordToId").Find(c, bson.M{"word": bson.M{"$in": inputTextSplit}})
-	if err != nil {
-		log.Println("log - collection returned error")
-		panic(err)
-	}
-
-	var WordToIdCollection []WordToId
-	if err = WordToIdCursor.All(c, &WordToIdCollection); err != nil {
-		panic(err)
-	}
-
-	for _, values := range WordToIdCollection {
-		allOccurrences = append(allOccurrences, values.IDs...)
-	}
-
-	IdToDocCursor, err := db.Collection("IdToDoc").Find(c, bson.M{"id": bson.M{"$in": allOccurrences}})
-	if err != nil {
-		log.Println("log - collection returned error")
-		panic(err)
-	}
-
-	var IdToDocCollection []IdToDoc
-	if err = IdToDocCursor.All(c, &IdToDocCollection); err != nil {
-		panic(err)
-	}
-
-	var documents []string
-
-	for _, elements := range IdToDocCollection {
-		documents = append(documents, elements.Document)
-	}
-	c.JSON(http.StatusOK, documents)
 }

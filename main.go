@@ -3,14 +3,15 @@ package main
 import (
 	"log"
 
+	"github.com/Xceptions/DocumentSearchEngineGo/handlers"
 	"github.com/gin-gonic/gin"
 )
 
 func setupRouter() *gin.Engine {
 	router := gin.Default()
 
-	router.POST("/add", addDocumentToDB)
-	router.POST("/search", searchForDocumentsContainingTerm)
+	router.POST("/add", handlers.AddDocumentToDB)
+	router.POST("/search", handlers.SearchForDocumentsContainingTerm)
 
 	return router
 }
