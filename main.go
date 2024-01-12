@@ -16,6 +16,10 @@ func setupRouter() *gin.Engine {
 	return router
 }
 
+// Input: None
+// is the entrypoint for the application. It
+// sets up a gin router and maps to various
+// views, then runs the server on port 8080
 func main() {
 	router := setupRouter()
 
